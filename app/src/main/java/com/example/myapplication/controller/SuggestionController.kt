@@ -7,7 +7,7 @@ import androidx.core.graphics.scale
 import com.example.myapplication.data.Suggestion
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabeling
-import com.google.mlkit.vision.label.common.ImageLabelerOptions
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow

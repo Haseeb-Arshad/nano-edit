@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +19,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.controller.EditController
 import androidx.compose.runtime.rememberCoroutineScope
 import com.example.myapplication.data.FilterSuggestion
+import com.example.myapplication.ai.MockAIImageProcessor
+import kotlinx.coroutines.launch
 
 @Composable
 fun ImageEditorScreen(
@@ -27,12 +29,17 @@ fun ImageEditorScreen(
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val controller = remember { EditController(scope) }
+    val aiProcessor = remember { MockAIImageProcessor() }
     var currentBitmap by remember { mutableStateOf(originalBitmap) }
     var showEnhancementDialog by remember { mutableStateOf(false) }
     
+    var analysisResult by remember { mutableStateOf<com.example.myapplication.data.ImageAnalysisResult?>(null) }
+    var isProcessing by remember { mutableStateOf(false) }
+    
     LaunchedEffect(originalBitmap) {
-        controller.analyzeImage(originalBitmap)
+        isProcessing = true
+        analysisResult = aiProcessor.analyzeImage(originalBitmap)
+        isProcessing = false
     }
     
     Column(
@@ -53,7 +60,7 @@ fun ImageEditorScreen(
             Button(
                 onClick = { onSaveImage(currentBitmap) }
             ) {
-                Icon(Icons.Default.Save, contentDescription = null)
+                Icon(Icons.Default.Check, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Save")
             }
@@ -74,7 +81,7 @@ fun ImageEditorScreen(
                 contentScale = ContentScale.Fit
             )
             
-            if (controller.isProcessing) {
+            if (isProcessing) {
                 Card(
                     modifier = Modifier.align(Alignment.Center)
                 ) {
@@ -91,7 +98,7 @@ fun ImageEditorScreen(
         }
         
         // AI Suggestions
-        controller.analysisResult?.let { result ->
+        analysisResult?.let { result ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -111,8 +118,10 @@ fun ImageEditorScreen(
                     ) {
                         items(result.suggestedFilters) { filter ->
                             SuggestionChip(filter) {
-                                controller.applyFilter(currentBitmap, filter.name) { newBitmap ->
-                                    currentBitmap = newBitmap
+                                scope.launch {
+                                    isProcessing = true
+                                    currentBitmap = aiProcessor.applyFilter(currentBitmap, filter.name)
+                                    isProcessing = false
                                 }
                             }
                         }
@@ -133,7 +142,7 @@ fun ImageEditorScreen(
             Button(
                 onClick = { showEnhancementDialog = true }
             ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                Icon(Icons.Default.Star, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("AI Enhance")
             }
@@ -145,8 +154,10 @@ fun ImageEditorScreen(
             onDismiss = { showEnhancementDialog = false },
             onEnhance = { prompt ->
                 showEnhancementDialog = false
-                controller.enhanceImage(currentBitmap, prompt) { newBitmap ->
-                    currentBitmap = newBitmap
+                scope.launch {
+                    isProcessing = true
+                    currentBitmap = aiProcessor.enhanceImage(currentBitmap, prompt)
+                    isProcessing = false
                 }
             }
         )

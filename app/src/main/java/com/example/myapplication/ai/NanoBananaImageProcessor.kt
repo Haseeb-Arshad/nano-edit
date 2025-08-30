@@ -4,10 +4,14 @@ import android.graphics.Bitmap
 import com.example.myapplication.data.EditRepository
 import com.example.myapplication.data.EditRequestDto
 import com.example.myapplication.data.ImageAnalysisResult
+import com.example.myapplication.network.NanoBananaApi
 import kotlinx.coroutines.delay
+import javax.inject.Inject
 
-class NanoBananaImageProcessor : AIImageProcessor {
-    private val repo = EditRepository()
+class NanoBananaImageProcessor @Inject constructor(
+    private val api: NanoBananaApi
+) : AIImageProcessor {
+    private val repo = EditRepository(api)
     private val mock = MockAIImageProcessor()
 
     override suspend fun analyzeImage(bitmap: Bitmap): ImageAnalysisResult {

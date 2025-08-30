@@ -25,6 +25,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +59,7 @@ import com.example.myapplication.utils.loadBitmap
 import com.example.myapplication.utils.saveBitmapToGallery
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
+import com.google.accompanist.permissions.isGranted
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import androidx.compose.runtime.collectAsState
@@ -72,7 +76,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AppRoot(editRepository: EditRepository) {
     AppTheme {
@@ -141,7 +145,7 @@ private fun CameraScreenHost(
     val lifecycleOwner = LocalLifecycleOwner.current
     var granted by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { permission.launchPermissionRequest() }
-    LaunchedEffect(permission.status.isGranted) {
+    LaunchedEffect(permission.status) {
         granted = permission.status.isGranted
         controller.updatePermission(granted)
     }
@@ -203,13 +207,14 @@ fun CameraScreen(
                 }
             }
         }
-        androidx.compose.material3.ExtendedFloatingActionButton(
+        androidx.compose.material3.FloatingActionButton(
             modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
             onClick = {
                 controller.capture(ctx) { uri -> uri?.let(onCaptured) }
-            },
-            text = { Text(if (state.isCapturing) "Capturing…" else "Shutter") }
-        )
+            }
+        ) {
+            Text(if (state.isCapturing) "Capturing…" else "Shutter")
+        }
         AnimatedVisibility(visible = state.error != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter).padding(16.dp)) {
             Text(text = state.error ?: "", color = MaterialTheme.colorScheme.error)
         }

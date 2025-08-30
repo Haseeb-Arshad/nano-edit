@@ -1,13 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
-    kotlin("kapt")
+    alias(libs.plugins.ksp)
 }
 
 // Load local properties for secrets (NB_API_KEY, NB_BASE_URL)
-val localProps = java.util.Properties().apply {
+val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
@@ -49,9 +51,7 @@ android {
     }
     buildFeatures {
         compose = true
-    }
-    kapt {
-        correctErrorTypes = true
+        buildConfig = true
     }
 }
 
@@ -95,7 +95,7 @@ dependencies {
 
     // Hilt (DI)
     implementation("com.google.dagger:hilt-android:2.51")
-    kapt("com.google.dagger:hilt-android-compiler:2.51")
+    ksp("com.google.dagger:hilt-android-compiler:2.51")
 
     // For on-device ML (TensorFlow Lite)
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
