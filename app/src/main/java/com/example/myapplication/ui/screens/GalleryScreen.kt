@@ -20,7 +20,10 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 
 @Composable
-fun GalleryScreen() {
+fun GalleryScreen(
+    onBack: (() -> Unit)? = null,
+    onOpen: ((android.net.Uri) -> Unit)? = null
+) {
     val ctx = LocalContext.current
     val uris = remember { mutableStateListOf<android.net.Uri>() }
     LaunchedEffect(Unit) {
@@ -47,21 +50,52 @@ fun GalleryScreen() {
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp)
-    ) {
-        items(uris) { uri ->
-            Card(Modifier.padding(bottom = 12.dp)) {
-                AsyncImage(
-                    model = uri,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize()
-                )
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+        // Minimal top bar
+        androidx.compose.foundation.layout.Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
+        ) {
+            if (onBack != null) {
+                androidx.compose.material3.Button(onClick = onBack) { Text("Back") }
             }
+            Text("Gallery", style = MaterialTheme.typography.titleLarge)
+            androidx.compose.foundation.layout.Spacer(Modifier)
         }
-        if (uris.isEmpty()) {
-            item { Text("No edits yet", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(16.dp)) }
+
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(minSize = 120.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(12.dp),
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+        ) {
+            items(uris.size) { idx ->
+                val uri = uris[idx]
+                androidx.compose.material3.Card(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                ) {
+                    androidx.compose.foundation.clickable(onClick = { onOpen?.invoke(uri) }) {
+                        AsyncImage(
+                            model = uri,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .aspectRatio(1f),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    }
+                }
+            }
+            if (uris.isEmpty()) {
+                item {
+                    Text(
+                        "No edits yet",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+            }
         }
     }
 }

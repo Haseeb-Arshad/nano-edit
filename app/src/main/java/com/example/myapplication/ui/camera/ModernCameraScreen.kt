@@ -2,6 +2,7 @@ package com.example.myapplication.ui.camera
 
 import android.Manifest
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -85,6 +86,9 @@ fun ModernCameraScreen(
     var showBeautyPanel by remember { mutableStateOf(false) }
     var showFilterStore by remember { mutableStateOf(false) }
     var isMenuExpanded by remember { mutableStateOf(false) }
+    var timerSeconds by remember { mutableStateOf(0) }
+    var showTimerMenu by remember { mutableStateOf(false) }
+    var countdownRemaining by remember { mutableStateOf(0) }
     
     // Beauty settings
     var smoothness by remember { mutableStateOf(0.5f) }
@@ -135,6 +139,11 @@ fun ModernCameraScreen(
             }
         }
     }
+
+    // Keep ImageCapture flash mode in sync when toggled
+    LaunchedEffect(flashMode) {
+        imageCapture?.flashMode = flashMode
+    }
     
     if (cameraPermissionState.status.isGranted) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -184,14 +193,30 @@ fun ModernCameraScreen(
                             )
                         )
                 )
+
+                // Countdown overlay
+                AnimatedVisibility(
+                    visible = countdownRemaining > 0,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    Text(
+                        text = countdownRemaining.toString(),
+                        color = NeonPink,
+                        fontSize = 72.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
             
             // Top Controls
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 48.dp, start = 16.dp, end = 16.dp)
-                    .align(Alignment.TopCenter),
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, top = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -223,15 +248,31 @@ fun ModernCameraScreen(
                             )
                         }
                         
-                        IconButton(onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            // Toggle timer
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Timer,
-                                contentDescription = "Timer",
-                                tint = Color.White
-                            )
+                        Box {
+                            IconButton(onClick = {
+                                showTimerMenu = true
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = "Timer",
+                                    tint = if (timerSeconds > 0) NeonPink else Color.White
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showTimerMenu,
+                                onDismissRequest = { showTimerMenu = false }
+                            ) {
+                                listOf(0, 3, 5, 10).forEach { sec ->
+                                    DropdownMenuItem(
+                                        text = { Text(if (sec == 0) "Off" else "${sec}s") },
+                                        onClick = {
+                                            timerSeconds = sec
+                                            showTimerMenu = false
+                                        }
+                                    )
+                                }
+                            }
                         }
                         
                         IconButton(onClick = {
@@ -293,125 +334,155 @@ fun ModernCameraScreen(
                 }
             }
             
-            // Camera modes carousel
-            LazyRow(
+            // Bottom UI stack: modes, filters, controls (no overlaps)
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 200.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp)
+                    .navigationBarsPadding()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                items(CameraMode.values()) { mode ->
-                    CameraModeChip(
-                        mode = mode,
-                        isSelected = currentMode == mode,
-                        onClick = {
-                            currentMode = mode
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                    )
-                }
-            }
-            
-            // Filter carousel
-            LazyRow(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 140.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp)
-            ) {
-                items(filters) { filter ->
-                    FilterCarouselItem(
-                        filterName = filter.name,
-                        filterPreview = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(filter.preview)
-                            ) {
-                                Icon(
-                                    imageVector = filter.icon,
-                                    contentDescription = filter.name,
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .size(24.dp),
-                                    tint = Color.White
-                                )
-                            }
-                        },
-                        isSelected = selectedFilter == filter,
-                        onClick = {
-                            selectedFilter = if (selectedFilter == filter) null else filter
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                    )
-                }
-            }
-            
-            // Bottom controls
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Gallery button
-                GlassmorphicCard(
-                    modifier = Modifier.size(48.dp),
-                    cornerRadius = 24.dp
+                // Camera modes carousel
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    IconButton(
-                        onClick = {
-                            onNavigateToGallery()
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = "Gallery",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                    items(CameraMode.values()) { mode ->
+                        CameraModeChip(
+                            mode = mode,
+                            isSelected = currentMode == mode,
+                            onClick = {
+                                currentMode = mode
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
                         )
                     }
                 }
-                
-                // Capture button
-                AnimatedCaptureButton(
-                    onClick = {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (currentMode == CameraMode.VIDEO) {
-                            isRecording = !isRecording
-                        } else {
-                            // Capture photo
-                            val placeholderBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
-                            onImageCaptured(placeholderBitmap)
-                        }
-                    },
-                    isRecording = isRecording
-                )
-                
-                // Effects button
-                GlassmorphicCard(
-                    modifier = Modifier.size(48.dp),
-                    cornerRadius = 24.dp
+
+                // Filter carousel
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    IconButton(
-                        onClick = {
-                            isMenuExpanded = !isMenuExpanded
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "Effects",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
+                    items(filters) { filter ->
+                        FilterCarouselItem(
+                            filterName = filter.name,
+                            filterPreview = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(filter.preview)
+                                ) {
+                                    Icon(
+                                        imageVector = filter.icon,
+                                        contentDescription = filter.name,
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .size(24.dp),
+                                        tint = Color.White
+                                    )
+                                }
+                            },
+                            isSelected = selectedFilter == filter,
+                            onClick = {
+                                selectedFilter = if (selectedFilter == filter) null else filter
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
                         )
+                    }
+                }
+
+                // Bottom controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Gallery button
+                    GlassmorphicCard(
+                        modifier = Modifier.size(48.dp),
+                        cornerRadius = 24.dp
+                    ) {
+                        IconButton(
+                            onClick = {
+                                onNavigateToGallery()
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoLibrary,
+                                contentDescription = "Gallery",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    // Capture button with optional countdown
+                    AnimatedCaptureButton(
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (currentMode == CameraMode.VIDEO) {
+                                isRecording = !isRecording
+                            } else {
+                                val performCapture = {
+                                    val ic = imageCapture
+                                    if (ic != null) {
+                                        val file = java.io.File(context.cacheDir, "cap_${System.currentTimeMillis()}.jpg")
+                                        val output = ImageCapture.OutputFileOptions.Builder(file).build()
+                                        ic.takePicture(
+                                            output,
+                                            ContextCompat.getMainExecutor(context),
+                                            object : ImageCapture.OnImageSavedCallback {
+                                                override fun onError(exc: ImageCaptureException) {
+                                                    // You may show a snackbar or log error
+                                                }
+                                                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                                    val bmp = BitmapFactory.decodeFile(file.absolutePath)
+                                                    if (bmp != null) onImageCaptured(bmp)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                                if (timerSeconds > 0) {
+                                    scope.launch {
+                                        for (i in timerSeconds downTo 1) {
+                                            countdownRemaining = i
+                                            delay(1000)
+                                        }
+                                        countdownRemaining = 0
+                                        performCapture()
+                                    }
+                                } else {
+                                    performCapture()
+                                }
+                            }
+                        },
+                        isRecording = isRecording
+                    )
+
+                    // Effects button
+                    GlassmorphicCard(
+                        modifier = Modifier.size(48.dp),
+                        cornerRadius = 24.dp
+                    ) {
+                        IconButton(
+                            onClick = {
+                                isMenuExpanded = !isMenuExpanded
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "Effects",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -426,8 +497,9 @@ fun ModernCameraScreen(
                 GlassmorphicCard(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .navigationBarsPadding()
                         .padding(16.dp)
-                        .padding(bottom = 200.dp),
+                        .padding(bottom = 16.dp),
                     cornerRadius = 24.dp
                 ) {
                     Column(

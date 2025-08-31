@@ -28,8 +28,7 @@ fun ModernEditorScreen(
 fun ModernGalleryScreen(
     onBack: () -> Unit
 ) {
-    // Delegate to existing GalleryScreen for now
-    com.example.myapplication.ui.screens.GalleryScreen()
+    com.example.myapplication.ui.screens.GalleryScreen(onBack = onBack)
 }
 
 @Composable
