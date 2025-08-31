@@ -37,7 +37,7 @@ API
 
 - GET /api/v1/edit/{job_id}/result
   - If small, responds with { result_base64 } (JSON)
-  - Else 302 redirect to presigned S3 URL (5 min TTL)
+ - Else 302 redirect to presigned S3 URL (5 min TTL)
 
 Curl Examples
 Synchronous submit
@@ -61,3 +61,7 @@ Notes
 - NSFW check is a stub that flags when header X-Force-NSFW: true or prompt contains [NSFW].
 - Idempotency: client_request_id + user_id deduplicates requests.
 
+Direct Gemini Test
+- Set PROVIDER=gemini and GEMINI_API_KEY in .env
+- Run: `bun run scripts/direct_gemini.ts /path/to/photo.jpg "Make colors vivid"`
+- Confirms response parsing finds `candidates[0].content.parts[*].inline_data.data`.

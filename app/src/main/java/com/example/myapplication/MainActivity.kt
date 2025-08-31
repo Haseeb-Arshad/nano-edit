@@ -1,12 +1,13 @@
 package com.example.myapplication
 
 import android.Manifest
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilledTonalButton
@@ -65,6 +67,14 @@ import javax.inject.Inject
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.LifecycleOwner
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -72,65 +82,130 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { AppRoot(editRepository) }
+        
+        // Set status bar and navigation bar colors
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        
+        setContent { ModernAppRoot(editRepository) }
     }
 }
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun AppRoot(editRepository: EditRepository) {
+fun ModernAppRoot(editRepository: EditRepository) {
     AppTheme {
         val nav = rememberNavController()
         val snackbar = remember { SnackbarHostState() }
-        val cameraController = remember { CameraController() }
-        val suggestionController = remember { SuggestionController() }
         val editController = remember { com.example.myapplication.controller.EditController(editRepository) }
+        val ctx = LocalContext.current
 
-        Scaffold(
-            topBar = {
-                TopAppBar(title = { Text("AI Camera") }, actions = {
-                    IconButton(onClick = { nav.navigate(NavRoutes.Settings) }) { /* Settings icon omitted for brevity */ }
-                })
-            },
-            snackbarHost = { SnackbarHost(snackbar) }
-        ) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Animated gradient background
+            com.example.myapplication.ui.components.AnimatedGradientBackground(
+                modifier = Modifier.fillMaxSize()
+            )
+            
             NavHost(
                 navController = nav,
                 startDestination = NavRoutes.Camera,
-                modifier = Modifier.padding(padding)
+                modifier = Modifier.fillMaxSize()
             ) {
-                composable(NavRoutes.Camera) {
-                    CameraScreenHost(cameraController, suggestionController) { uri ->
-                        nav.navigate(NavRoutes.review(Uri.encode(uri.toString())))
-                    }
+                composable(
+                    NavRoutes.Camera
+                ) {
+                    com.example.myapplication.ui.camera.ModernCameraScreen(
+                        onImageCaptured = { bitmap ->
+                            // Save bitmap and navigate to review
+                            val uri = saveBitmapTemporary(ctx, bitmap)
+                            nav.navigate(NavRoutes.review(Uri.encode(uri.toString())))
+                        },
+                        onNavigateToGallery = {
+                            nav.navigate(NavRoutes.Gallery)
+                        },
+                        onNavigateToSettings = {
+                            nav.navigate(NavRoutes.Settings)
+                        }
+                    )
                 }
+                
                 composable(
                     route = NavRoutes.Review,
                     arguments = listOf(navArgument("uri") { type = NavType.StringType })
                 ) { backStackEntry ->
                     val arg = backStackEntry.arguments?.getString("uri")
                     val uri = arg?.let { Uri.parse(Uri.decode(it)) }
-                    ReviewScreen(uri = uri, onEdit = {
-                        nav.navigate(NavRoutes.editor(Uri.encode(uri.toString())))
-                    })
+                    com.example.myapplication.ui.modern.ModernReviewScreen(
+                        uri = uri,
+                        onEdit = {
+                            nav.navigate(NavRoutes.editor(Uri.encode(uri.toString())))
+                        },
+                        onBack = { nav.popBackStack() }
+                    )
                 }
+                
                 composable(
                     route = NavRoutes.Editor,
                     arguments = listOf(navArgument("uri") { type = NavType.StringType })
                 ) { backStackEntry ->
                     val arg = backStackEntry.arguments?.getString("uri")
                     val uri = arg?.let { Uri.parse(Uri.decode(it)) }
-                    EditorScreenHost(editController = editController, src = uri)
+                    com.example.myapplication.ui.modern.ModernEditorScreen(
+                        src = uri,
+                        controller = editController,
+                        onBack = { nav.popBackStack() }
+                    )
                 }
-                composable(NavRoutes.Gallery) {
-                    com.example.myapplication.ui.screens.GalleryScreen()
+                
+                composable(
+                    NavRoutes.Gallery
+                ) {
+                    com.example.myapplication.ui.modern.ModernGalleryScreen(
+                        onBack = { nav.popBackStack() }
+                    )
                 }
-                composable(NavRoutes.Settings) {
-                    com.example.myapplication.ui.screens.SettingsScreen()
+                
+                composable(
+                    NavRoutes.Settings
+                ) {
+                    com.example.myapplication.ui.modern.ModernSettingsScreen(
+                        onBack = { nav.popBackStack() }
+                    )
+                }
+            }
+            
+            // Snackbar host with modern styling
+            SnackbarHost(
+                hostState = snackbar,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) { data ->
+                com.example.myapplication.ui.components.GlassmorphicCard(
+                    modifier = Modifier.padding(16.dp),
+                    cornerRadius = 16.dp
+                ) {
+                    Text(
+                        text = data.visuals.message,
+                        modifier = Modifier.padding(16.dp),
+                        color = Color.White
+                    )
                 }
             }
         }
     }
+}
+
+// Helper function to save bitmap temporarily
+private fun saveBitmapTemporary(context: android.content.Context, bitmap: Bitmap): Uri {
+    val file = File(context.cacheDir, "temp_${System.currentTimeMillis()}.jpg")
+    try {
+        val stream = FileOutputStream(file)
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+        stream.flush()
+        stream.close()
+    } catch (e: IOException) {
+        e.printStackTrace()
+    }
+    return Uri.fromFile(file)
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -176,6 +251,7 @@ fun CameraScreen(
     lifecycleOwner: LifecycleOwner
 ) {
     val ctx = LocalContext.current
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     val state: CameraUiState = controller.state.collectAsState(initial = CameraUiState()).value
     val preview = remember { androidx.camera.view.PreviewView(ctx) }
 
@@ -189,34 +265,58 @@ fun CameraScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
+        // Camera preview
         androidx.compose.ui.viewinterop.AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { preview }
         )
+
+        // Top glass bar (placeholder actions)
+        com.example.myapplication.ui.components.GlassCard(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(12.dp)
+        ) {
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("AI Camera", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+
+        // Suggestion chips (glass buttons)
         val chips = suggestions.chips.collectAsState(initial = emptyList()).value
-        if (chips.isNotEmpty()) {
-            androidx.compose.foundation.layout.Row(
-                modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)
-            ) {
-                chips.forEach { chip ->
-                    androidx.compose.material3.AssistChip(
+        AnimatedVisibility(visible = chips.isNotEmpty(), enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+            androidx.compose.foundation.layout.Row {
+chips.forEach { chip ->
+                    com.example.myapplication.ui.components.GlassButton(
                         onClick = { /* future: prefill editor prompt */ },
-                        label = { Text(chip.title) },
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
+                        modifier = Modifier.padding(end = 8.dp).semantics { this.contentDescription = chip.title }
+                    ) {
+                        Text(chip.title)
+                    }
                 }
             }
         }
-        androidx.compose.material3.FloatingActionButton(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp),
-            onClick = {
-                controller.capture(ctx) { uri -> uri?.let(onCaptured) }
-            }
+
+        // Shutter dock (glass)
+        com.example.myapplication.ui.components.GlassCard(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 20.dp)
         ) {
-            Text(if (state.isCapturing) "Capturing…" else "Shutter")
+            Row(Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                com.example.myapplication.ui.components.ShutterButton(
+                    isCapturing = state.isCapturing,
+onClick = { haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); controller.capture(ctx) { uri -> uri?.let(onCaptured) } },
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .then(Modifier.size(96.dp))
+                )
+            }
         }
+
+        // Error bubble
         AnimatedVisibility(visible = state.error != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter).padding(16.dp)) {
-            Text(text = state.error ?: "", color = MaterialTheme.colorScheme.error)
+            com.example.myapplication.ui.components.GlassCard { Row(Modifier.padding(12.dp)) { Text(text = state.error ?: "", color = MaterialTheme.colorScheme.error) } }
         }
     }
 }
@@ -224,51 +324,118 @@ fun CameraScreen(
 @Composable
 fun ReviewScreen(uri: Uri?, onEdit: () -> Unit) {
     val ctx = LocalContext.current
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Review", style = MaterialTheme.typography.titleLarge)
-        Text(text = uri?.toString() ?: "No image")
-        Row(Modifier.padding(top = 16.dp)) {
-            FilledTonalButton(onClick = onEdit) { Text("Edit") }
-            androidx.compose.material3.OutlinedButton(onClick = { uri?.let { shareImage(ctx, it) } }, modifier = Modifier.padding(start = 12.dp)) { Text("Share") }
+    val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var original by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var enhanced by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var mode by remember { mutableStateOf(ReviewMode.Compare) }
+
+    LaunchedEffect(uri) {
+        if (uri != null) {
+            val bmp = com.example.myapplication.utils.loadBitmap(ctx, uri.toString())
+            original = bmp
+            enhanced = bmp?.let { com.example.myapplication.utils.quickEnhance(it, 0.6f) }
+        }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        com.example.myapplication.ui.components.GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                com.example.myapplication.ui.components.GlassButton(
+                    onClick = {
+                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        mode = ReviewMode.Compare
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Compare", color = if (mode == ReviewMode.Compare) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                }
+                com.example.myapplication.ui.components.GlassButton(
+                    onClick = {
+                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        mode = ReviewMode.SideBySide
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Side-by-side", color = if (mode == ReviewMode.SideBySide) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
+
+        Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
+            val o = original
+            val e = enhanced
+            if (o != null && e != null) {
+                androidx.compose.animation.Crossfade(targetState = mode) { currentMode ->
+                    when (currentMode) {
+                        ReviewMode.Compare -> {
+                            com.example.myapplication.ui.components.CompareSlider(
+                                modifier = Modifier.fillMaxSize().padding(8.dp),
+original = o.asImageBitmap(),
+enhanced = e.asImageBitmap()
+                            )
+                        }
+                        ReviewMode.SideBySide -> {
+                            Row(Modifier.fillMaxSize().padding(8.dp)) {
+                                androidx.compose.foundation.Image(
+bitmap = o.asImageBitmap(),
+                                    contentDescription = "Original",
+                                    modifier = Modifier.weight(1f).fillMaxSize()
+                                )
+                                androidx.compose.foundation.Image(
+bitmap = e.asImageBitmap(),
+                                    contentDescription = "Enhanced",
+                                    modifier = Modifier.weight(1f).fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                com.example.myapplication.ui.components.GlassCard { Box(Modifier.padding(16.dp)) { Text("Loading preview…") } }
+            }
+        }
+
+        com.example.myapplication.ui.components.GlassCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                com.example.myapplication.ui.components.GlassButton(
+                    onClick = {
+                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        onEdit()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Open Editor")
+                }
+                com.example.myapplication.ui.components.GlassButton(
+                    onClick = {
+                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        uri?.let { shareImage(ctx, it) }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Share Original")
+                }
+            }
         }
     }
 }
 
-@Composable
-fun EditorScreenHost(editController: com.example.myapplication.controller.EditController, src: Uri?) {
-    val state = editController.state.collectAsState(initial = com.example.myapplication.data.EditUiState()).value
-    val ctx = LocalContext.current
-    val prefs = remember { PreferencesRepository(ctx) }
-    val offline = prefs.offlineFlow.collectAsState(initial = false).value
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(src) { src?.let { editController.setSource(it) } }
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Editor", style = MaterialTheme.typography.titleLarge)
-        androidx.compose.material3.OutlinedTextField(
-            value = state.prompt,
-            onValueChange = editController::setPrompt,
-            modifier = Modifier.padding(top = 12.dp),
-            label = { Text("Prompt") }
-        )
-        FilledTonalButton(onClick = { editController.applyEdit(offline = offline) }, modifier = Modifier.padding(top = 16.dp)) {
-            Text(if (state.isLoading) "Applying…" else "Apply Edit")
-        }
-        if (offline) {
-            Text("Offline mode: using local preview only", color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 8.dp))
-        }
-        state.error?.let { Text("Error: $it", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 12.dp)) }
-        state.resultUrl?.let { url ->
-            Text("Result ready", modifier = Modifier.padding(top = 12.dp))
-            OutlinedButton(onClick = {
-                scope.launch {
-                    val bmp = loadBitmap(ctx, url)
-                    if (bmp != null) {
-                        saveBitmapToGallery(ctx, bmp, "AICam_Edit")
-                    }
-                }
-            }, modifier = Modifier.padding(top = 8.dp)) { Text("Save to Gallery") }
-        }
-    }
-}
+enum class ReviewMode { Compare, SideBySide }
+
 
 @Composable fun GalleryScreen() { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Gallery (todo)") } }

@@ -30,8 +30,10 @@ object NanoBananaClient {
     }
 
     private val retrofit: Retrofit by lazy {
+        val raw = BuildConfig.NB_BASE_URL ?: ""
+        val normalized = if (raw.endsWith('/')) raw else "$raw/"
         Retrofit.Builder()
-            .baseUrl(BuildConfig.NB_BASE_URL)
+            .baseUrl(normalized)
             .client(client)
             .addConverterFactory(MoshiConverterFactory.create(Moshi.Builder().build()))
             .build()

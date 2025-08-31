@@ -11,7 +11,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.637.0",
     "@aws-sdk/s3-request-presigner": "^3.637.0",
-    "better-sqlite3": "^9.4.1",
+    "@aws-sdk/credential-providers": "^3.637.0",
     "bullmq": "^5.6.3",
     "dayjs": "^1.11.13",
     "dotenv": "^16.4.5",
@@ -26,8 +26,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "bun-types": "^1.1.16",
     "@types/node": "^22.5.0",
     "typescript": "^5.5.4"
   }
 }
-

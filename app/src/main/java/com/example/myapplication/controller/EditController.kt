@@ -38,13 +38,15 @@ class EditController @Inject constructor(
                 } else {
                     val jobId = repo.submitEdit(src.toString(), prompt)
                     var result = repo.pollResult(jobId)
+                    // Poll with a small delay to avoid busy loop
                     while (!result.isTerminal) {
+                        kotlinx.coroutines.delay(1000)
                         result = repo.pollResult(jobId)
                     }
                     if (result.url != null) {
                         _state.update { it.copy(isLoading = false, resultUrl = result.url) }
                     } else {
-                        error(result.error ?: "Unknown error")
+                        _state.update { it.copy(isLoading = false, error = result.error ?: "Unknown error") }
                     }
                 }
             }.onFailure { e ->

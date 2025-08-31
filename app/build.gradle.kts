@@ -65,6 +65,8 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    // Material icons extended for additional Icons.* used
+    implementation("androidx.compose.material:material-icons-extended")
     
     // CameraX
     implementation("androidx.camera:camera-core:1.3.2")
