@@ -26,9 +26,10 @@ fun ModernEditorScreen(
 
 @Composable
 fun ModernGalleryScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpen: (Uri) -> Unit
 ) {
-    com.example.myapplication.ui.screens.GalleryScreen(onBack = onBack)
+    com.example.myapplication.ui.screens.GalleryScreen(onBack = onBack, onOpen = onOpen)
 }
 
 @Composable

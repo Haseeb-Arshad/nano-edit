@@ -3,6 +3,8 @@ package com.example.myapplication.ui.screens
 import android.content.ContentUris
 import android.provider.MediaStore
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -75,16 +77,15 @@ fun GalleryScreen(
                 androidx.compose.material3.Card(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
                 ) {
-                    androidx.compose.foundation.clickable(onClick = { onOpen?.invoke(uri) }) {
-                        AsyncImage(
-                            model = uri,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .aspectRatio(1f),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-                    }
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .aspectRatio(1f)
+                            .clickable { onOpen?.invoke(uri) },
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
                 }
             }
             if (uris.isEmpty()) {

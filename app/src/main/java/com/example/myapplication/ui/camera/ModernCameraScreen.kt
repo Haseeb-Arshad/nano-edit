@@ -4,6 +4,7 @@ import android.Manifest
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.camera.core.*
+import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.*
@@ -79,6 +80,7 @@ fun ModernCameraScreen(
     var flashMode by remember { mutableStateOf(ImageCapture.FLASH_MODE_OFF) }
     var isRecording by remember { mutableStateOf(false) }
     var zoomLevel by remember { mutableStateOf(1f) }
+    var boundCamera by remember { mutableStateOf<Camera?>(null) }
     
     // UI states
     var selectedFilter by remember { mutableStateOf<FilterEffect?>(null) }
@@ -112,8 +114,8 @@ fun ModernCameraScreen(
         )
     }
     
-    // Camera setup
-    LaunchedEffect(cameraPermissionState.status.isGranted) {
+    // Camera setup (re-bind on permission or lens switch)
+    LaunchedEffect(cameraPermissionState.status.isGranted, cameraSelector) {
         if (cameraPermissionState.status.isGranted) {
             val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
             val cameraProvider = cameraProviderFuture.get()
@@ -132,6 +134,9 @@ fun ModernCameraScreen(
                     preview,
                     imageCaptureUseCase
                 )
+                boundCamera = camera
+                // restore zoom on rebind
+                try { boundCamera?.cameraControl?.setZoomRatio(zoomLevel) } catch (_: Exception) {}
                 
                 previewView?.let { preview.setSurfaceProvider(it.surfaceProvider) }
             } catch (exc: Exception) {
@@ -159,6 +164,7 @@ fun ModernCameraScreen(
                             // Pinch to zoom
                             detectTransformGestures { _, _, zoom, _ ->
                                 zoomLevel = (zoomLevel * zoom).coerceIn(1f, 5f)
+                                try { boundCamera?.cameraControl?.setZoomRatio(zoomLevel) } catch (_: Exception) {}
                             }
                         }
                         .pointerInput(Unit) {
@@ -216,7 +222,7 @@ fun ModernCameraScreen(
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, top = 12.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {

@@ -161,7 +161,10 @@ fun ModernAppRoot(editRepository: EditRepository) {
                     NavRoutes.Gallery
                 ) {
                     com.example.myapplication.ui.modern.ModernGalleryScreen(
-                        onBack = { nav.popBackStack() }
+                        onBack = { nav.popBackStack() },
+                        onOpen = { uri ->
+                            nav.navigate(NavRoutes.review(Uri.encode(uri.toString())))
+                        }
                     )
                 }
                 
