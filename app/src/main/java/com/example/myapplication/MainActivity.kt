@@ -114,7 +114,7 @@ fun ModernAppRoot(editRepository: EditRepository) {
                 composable(
                     NavRoutes.Camera
                 ) {
-                    com.example.myapplication.ui.camera.ModernCameraScreen(
+                    com.example.myapplication.ui.camera.CleanCameraScreen(
                         onImageCaptured = { bitmap ->
                             // Save bitmap and navigate to review
                             val uri = saveBitmapTemporary(ctx, bitmap)

@@ -56,10 +56,6 @@ enum class FilterType {
     BEAUTY, COLOR, AR_MASK, VINTAGE, ARTISTIC, FACE_MORPH
 }
 
-enum class CameraMode {
-    PHOTO, VIDEO, STORY, AR_FILTER, BEAUTY, PORTRAIT
-}
-
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ModernCameraScreen(
