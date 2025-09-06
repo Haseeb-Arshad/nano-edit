@@ -57,11 +57,28 @@ import com.example.myapplication.ui.filters.FilterCategory
 import com.example.myapplication.ai.MockAIImageProcessor
 import com.example.myapplication.data.ImageAnalysisResult
 
+// Helper to build a smart prompt based on analysis
+private fun buildSmartEnhancePrompt(analysis: ImageAnalysisResult?): String {
+    if (analysis == null) return "Balanced enhancement, natural lighting, crisp details, true-to-life colors, minimal noise"
+    val tags = analysis.detectedObjects.take(3).joinToString(", ")
+    val styles = analysis.suggestedFilters.map { it.name.lowercase() }.take(2).joinToString(", ")
+    val base = mutableListOf(
+        "balanced enhancement",
+        "natural lighting",
+        "crisp details",
+        "true-to-life colors"
+    )
+    if (tags.isNotBlank()) base += "optimize for: $tags"
+    if (styles.isNotBlank()) base += "style: $styles"
+    return base.joinToString(", ")
+}
+
 @Composable
 fun EditorScreen(
     src: Uri?,
     controller: EditController,
-    autoSceneLift: Boolean = false
+    autoSmartEnhance: Boolean = false,
+    onBack: () -> Unit = {}
 ) {
     val ctx = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -75,12 +92,12 @@ fun EditorScreen(
     val scope = rememberCoroutineScope()
 
     // New UI state: categories
-    var activeCategory by remember { mutableStateOf<FilterCategory?>(FilterCategories.Tone) }
+    var activeCategory by remember { mutableStateOf<FilterCategory?>(FilterCategories.ToneCategory) }
 
-    // New: local AI analyzer for SceneLift prompt building
+    // New: local AI analyzer for Smart Enhance prompt building
     val aiProcessor = remember { MockAIImageProcessor() }
     var lastAnalysis by remember { mutableStateOf<ImageAnalysisResult?>(null) }
-    var didAutoSceneLift by remember { mutableStateOf(false) }
+    var didAutoSmartEnhance by remember { mutableStateOf(false) }
 
     LaunchedEffect(src) {
         src?.let {
@@ -97,37 +114,21 @@ fun EditorScreen(
                     }
                 }
             }
-            // Kick off lightweight analysis to fuel SceneLift
+            // Kick off lightweight analysis to fuel Smart Enhance
             original?.let { bmp ->
                 lastAnalysis = aiProcessor.analyzeImage(bmp)
             }
         }
     }
 
-    // Auto-run SceneLift once when requested (from Review)
-    LaunchedEffect(lastAnalysis, autoSceneLift) {
-        if (autoSceneLift && !didAutoSceneLift) {
-            val prompt = buildSceneLiftPrompt(lastAnalysis)
+    // Auto-run Smart Enhance once when requested (from Review)
+    LaunchedEffect(lastAnalysis, autoSmartEnhance) {
+        if (autoSmartEnhance && !didAutoSmartEnhance) {
+            val prompt = buildSmartEnhancePrompt(lastAnalysis)
             controller.setPrompt(prompt)
             controller.applyEdit(offline = false)
-            didAutoSceneLift = true
+            didAutoSmartEnhance = true
         }
-    }
-
-    // Helper to build a smart prompt based on analysis
-    fun buildSceneLiftPrompt(analysis: ImageAnalysisResult?): String {
-        if (analysis == null) return "Balanced enhancement, natural lighting, crisp details, true-to-life colors, minimal noise"
-        val tags = analysis.detectedObjects.take(3).joinToString(", ")
-        val styles = analysis.suggestedFilters.map { it.name.lowercase() }.take(2).joinToString(", ")
-        val base = mutableListOf(
-            "balanced enhancement",
-            "natural lighting",
-            "crisp details",
-            "true-to-life colors"
-        )
-        if (tags.isNotBlank()) base += "optimize for: $tags"
-        if (styles.isNotBlank()) base += "style: $styles"
-        return base.joinToString(", ")
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -137,7 +138,7 @@ fun EditorScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            GlassButton(onClick = { /* navigate back via activity */ }, modifier = Modifier) {
+            GlassButton(onClick = onBack, modifier = Modifier) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                 Spacer(Modifier.width(6.dp))
                 Text("Back")
@@ -187,7 +188,7 @@ fun EditorScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 } ?: run {
-                    GlassCard { Box(Modifier.padding(16.dp)) { Text("Loadingâ€¦") } }
+                    GlassCard { Box(Modifier.padding(16.dp)) { Text("Loading…¦") } }
                 }
             }
 
@@ -212,26 +213,26 @@ fun EditorScreen(
                     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         androidx.compose.material3.CircularProgressIndicator()
                         Spacer(Modifier.height(8.dp))
-                        Text("Enhancingâ€¦")
+                        Text("Enhancing…¦")
                     }
                 }
             }
         }
 
-        // Prompt input + SceneLift quick-fill
+        // Prompt input + Smart Enhance quick-fill
         GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
             Column(Modifier.padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Text("Describe enhancement", style = MaterialTheme.typography.titleMedium)
-                    // SceneLift action in the prompt card for visibility
+                    Text("Describe enhancements", style = MaterialTheme.typography.titleMedium)
+                    // Smart Enhance action in the prompt card for visibility
                     GlassButton(onClick = {
-                        val prompt = buildSceneLiftPrompt(lastAnalysis)
+                        val prompt = buildSmartEnhancePrompt(lastAnalysis)
                         controller.setPrompt(prompt)
                         controller.applyEdit(offline = false)
                     }) {
-                        Icon(Icons.Default.Star, contentDescription = "SceneLift")
+                        Icon(Icons.Default.Star, contentDescription = "Smart Enhance")
                         Spacer(Modifier.width(8.dp))
-                        Text("SceneLift")
+                        Text("Smart Enhance")
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -262,7 +263,7 @@ fun EditorScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 // Large tiles for selected category
-                val cat = activeCategory ?: FilterCategories.Tone
+                val cat = activeCategory ?: FilterCategories.ToneCategory
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
                     items(cat.presets) { preset ->
                         val tileScale = animateFloatAsState(
@@ -280,10 +281,10 @@ fun EditorScreen(
                                         Image(
                                             bitmap = thumb.asImageBitmap(),
                                             contentDescription = preset.name,
-                                            modifier = Modifier.size(120.dp).clip(RoundedCornerShape(18.dp))
+                                            modifier = Modifier.size(140.dp).clip(RoundedCornerShape(18.dp))
                                         )
                                     } else {
-                                        Text("â€¦", modifier = Modifier.size(120.dp))
+                                        Text("â€¦", modifier = Modifier.size(140.dp))
                                     }
                                 }
                             }
@@ -336,14 +337,14 @@ fun EditorScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             GlassButton(onClick = {
-                // One-tap SceneLift (same as button in prompt card)
-                val prompt = buildSceneLiftPrompt(lastAnalysis)
+                // One-tap Smart Enhance (same as button in prompt card)
+                val prompt = buildSmartEnhancePrompt(lastAnalysis)
                 controller.setPrompt(prompt)
                 controller.applyEdit(offline = false)
             }) {
-                Icon(Icons.Default.Star, contentDescription = "SceneLift")
+                Icon(Icons.Default.Star, contentDescription = "Smart Enhance")
                 Spacer(Modifier.width(8.dp))
-                Text("SceneLift")
+                Text("Smart Enhance")
             }
             androidx.compose.animation.AnimatedVisibility(visible = state.resultUrl != null) {
                 GlassButton(onClick = {

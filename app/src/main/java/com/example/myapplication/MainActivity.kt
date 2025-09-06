@@ -135,7 +135,18 @@ fun ModernAppRoot(editRepository: EditRepository) {
                 ) { backStackEntry ->
                     val arg = backStackEntry.arguments?.getString("uri")
                     val uri = arg?.let { Uri.parse(Uri.decode(it)) }
-com.example.myapplication.ui.modern.ModernReviewScreen(
+                    // Auto Smart Enhance preference
+                    val ctx2 = LocalContext.current
+                    val prefs = remember { com.example.myapplication.data.PreferencesRepository(ctx2) }
+                    val autoLift by prefs.autoSceneLiftFlow.collectAsState(initial = false)
+                    var didAuto by remember { mutableStateOf(false) }
+                    LaunchedEffect(uri, autoLift) {
+                        if (uri != null && autoLift && !didAuto) {
+                            didAuto = true
+                            nav.navigate(NavRoutes.editor(Uri.encode(uri.toString()), autolift = true))
+                        }
+                    }
+                    com.example.myapplication.ui.modern.ModernReviewScreen(
                         uri = uri,
                         onEdit = {
                             nav.navigate(NavRoutes.editor(Uri.encode(uri.toString())))
@@ -430,7 +441,7 @@ bitmap = e.asImageBitmap(),
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("SceneLift")
+                    Text("Smart Enhance")
                 }
                 com.example.myapplication.ui.components.GlassButton(
                     onClick = {

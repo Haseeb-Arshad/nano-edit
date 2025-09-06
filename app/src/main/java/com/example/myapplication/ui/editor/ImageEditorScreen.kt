@@ -144,7 +144,7 @@ fun ImageEditorScreen(
             ) {
                 Icon(Icons.Default.Star, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("AI Enhance")
+                Text("Smart Enhance")
             }
         }
     }

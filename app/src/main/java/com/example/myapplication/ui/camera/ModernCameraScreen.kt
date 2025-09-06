@@ -91,6 +91,8 @@ fun ModernCameraScreen(
     var timerSeconds by remember { mutableStateOf(0) }
     var showTimerMenu by remember { mutableStateOf(false) }
     var countdownRemaining by remember { mutableStateOf(0) }
+    // Category filter state
+    var activeFilterType by remember { mutableStateOf<FilterType?>(null) }
     
     // Capture flash overlay state
     var showFlash by remember { mutableStateOf(false) }
@@ -379,12 +381,40 @@ fun ModernCameraScreen(
                     }
                 }
 
+                // Filter category chips
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    item {
+                        CameraModeChip(
+                            mode = CameraMode.PHOTO, // dummy visual style reuse
+                            isSelected = activeFilterType == null,
+                            onClick = { activeFilterType = null }
+                        )
+                    }
+                    items(FilterType.values()) { t ->
+                        GlassmorphicCard(
+                            cornerRadius = 16.dp,
+                            modifier = Modifier
+                                .clickable { activeFilterType = t }
+                        ) {
+                            Text(
+                                text = t.name.replace("_", " ").lowercase().replaceFirstChar { it.titlecase() },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                color = if (activeFilterType == t) NeonPink else Color.White
+                            )
+                        }
+                    }
+                }
+
                 // Filter carousel
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    items(filters) { filter ->
+                    val displayFilters = activeFilterType?.let { t -> filters.filter { it.type == t } } ?: filters
+                    items(displayFilters) { filter ->
                         FilterCarouselItem(
                             filterName = filter.name,
                             filterPreview = {
@@ -407,7 +437,8 @@ fun ModernCameraScreen(
                             onClick = {
                                 selectedFilter = if (selectedFilter == filter) null else filter
                                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            }
+                            },
+                            modifier = if (activeFilterType != null) Modifier.scale(1.2f) else Modifier
                         )
                     }
                 }

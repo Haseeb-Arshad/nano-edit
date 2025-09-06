@@ -23,7 +23,7 @@ fun ModernEditorScreen(
     autoSceneLift: Boolean = false
 ) {
     // Delegate to existing EditorScreen
-    com.example.myapplication.ui.screens.EditorScreen(src = src, controller = controller, autoSceneLift = autoSceneLift)
+    com.example.myapplication.ui.screens.EditorScreen(src = src, controller = controller, autoSmartEnhance = autoSceneLift, onBack = onBack)
 }
 
 @Composable

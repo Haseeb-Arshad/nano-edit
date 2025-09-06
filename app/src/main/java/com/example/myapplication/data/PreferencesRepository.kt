@@ -16,11 +16,15 @@ class PreferencesRepository(private val context: Context) {
         val OFFLINE = booleanPreferencesKey("offline")
         val QUALITY = intPreferencesKey("quality") // 50..100
         val WATERMARK = booleanPreferencesKey("watermark")
+        val AUTO_SCENELIFT = booleanPreferencesKey("auto_scenelift")
+        val DARK_THEME = booleanPreferencesKey("dark_theme")
     }
 
     val offlineFlow: Flow<Boolean> = context.dataStore.data.map { it[Keys.OFFLINE] ?: false }
     val qualityFlow: Flow<Int> = context.dataStore.data.map { it[Keys.QUALITY] ?: 90 }
     val watermarkFlow: Flow<Boolean> = context.dataStore.data.map { it[Keys.WATERMARK] ?: false }
+    val autoSceneLiftFlow: Flow<Boolean> = context.dataStore.data.map { it[Keys.AUTO_SCENELIFT] ?: false }
+    val darkThemeFlow: Flow<Boolean> = context.dataStore.data.map { it[Keys.DARK_THEME] ?: false }
 
     suspend fun setOffline(enabled: Boolean) {
         context.dataStore.edit { it[Keys.OFFLINE] = enabled }
@@ -32,6 +36,14 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setWatermark(enabled: Boolean) {
         context.dataStore.edit { it[Keys.WATERMARK] = enabled }
+    }
+
+    suspend fun setAutoSceneLift(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_SCENELIFT] = enabled }
+    }
+
+    suspend fun setDarkTheme(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.DARK_THEME] = enabled }
     }
 }
 

@@ -22,32 +22,32 @@ data class FilterCategory(
 )
 
 object FilterCategories {
-    val Tone = FilterCategory(
+    val ToneCategory = FilterCategory(
         id = "tone",
         name = "Tone",
         presets = listOf(Vibrant, Warm, Cool, HighContrast, Soft)
     )
-    val Vintage = FilterCategory(
+    val VintageCategory = FilterCategory(
         id = "vintage",
         name = "Vintage",
         presets = listOf(Sepia, Film, Retro)
     )
-    val Cinema = FilterCategory(
+    val CinemaCategory = FilterCategory(
         id = "cinema",
         name = "Cinema",
         presets = listOf(Cinematic, Vivid)
     )
-    val Mono = FilterCategory(
+    val MonoCategory = FilterCategory(
         id = "mono",
         name = "Mono",
         presets = listOf(Mono)
     )
-    val Night = FilterCategory(
+    val NightCategory = FilterCategory(
         id = "night",
         name = "Night",
         presets = listOf(Night)
     )
 
-    val All = listOf(Tone, Vintage, Cinema, Mono, Night)
+    val All = listOf(ToneCategory, VintageCategory, CinemaCategory, MonoCategory, NightCategory)
 }
 

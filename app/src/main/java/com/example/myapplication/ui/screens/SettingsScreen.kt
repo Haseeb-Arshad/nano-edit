@@ -33,6 +33,8 @@ fun SettingsScreen() {
     val offline by repo.offlineFlow.collectAsState(initial = false)
     val quality by repo.qualityFlow.collectAsState(initial = 90)
     val watermark by repo.watermarkFlow.collectAsState(initial = false)
+    val autoSceneLift by repo.autoSceneLiftFlow.collectAsState(initial = false)
+    val darkTheme by repo.darkThemeFlow.collectAsState(initial = false)
 
     Column(Modifier.padding(16.dp)) {
         Text("Settings", style = MaterialTheme.typography.titleLarge)
@@ -53,6 +55,15 @@ fun SettingsScreen() {
             Text("Watermark edits", modifier = Modifier.weight(1f))
             Switch(checked = watermark, onCheckedChange = { checked -> scope.launch { repo.setWatermark(checked) } })
         }
+        Divider(Modifier.padding(vertical = 12.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Text("Auto Smart Enhance on Review", modifier = Modifier.weight(1f))
+            Switch(checked = autoSceneLift, onCheckedChange = { checked -> scope.launch { repo.setAutoSceneLift(checked) } })
+        }
+        Divider(Modifier.padding(vertical = 12.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Text("Dark theme (override)", modifier = Modifier.weight(1f))
+            Switch(checked = darkTheme, onCheckedChange = { checked -> scope.launch { repo.setDarkTheme(checked) } })
+        }
     }
 }
-
