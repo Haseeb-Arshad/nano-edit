@@ -8,20 +8,22 @@ import com.example.myapplication.controller.EditController
 fun ModernReviewScreen(
     uri: Uri?,
     onEdit: () -> Unit,
+    onSceneLift: () -> Unit,
     onBack: () -> Unit
 ) {
     // Delegate to existing ReviewScreen for now
-    com.example.myapplication.ReviewScreen(uri = uri, onEdit = onEdit)
+    com.example.myapplication.ReviewScreen(uri = uri, onEdit = onEdit, onSceneLift = onSceneLift)
 }
 
 @Composable
 fun ModernEditorScreen(
     src: Uri?,
     controller: EditController,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    autoSceneLift: Boolean = false
 ) {
     // Delegate to existing EditorScreen
-    com.example.myapplication.ui.screens.EditorScreen(src = src, controller = controller)
+    com.example.myapplication.ui.screens.EditorScreen(src = src, controller = controller, autoSceneLift = autoSceneLift)
 }
 
 @Composable

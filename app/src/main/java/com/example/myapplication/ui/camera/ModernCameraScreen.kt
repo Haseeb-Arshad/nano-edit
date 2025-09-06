@@ -92,6 +92,9 @@ fun ModernCameraScreen(
     var showTimerMenu by remember { mutableStateOf(false) }
     var countdownRemaining by remember { mutableStateOf(0) }
     
+    // Capture flash overlay state
+    var showFlash by remember { mutableStateOf(false) }
+    
     // Beauty settings
     var smoothness by remember { mutableStateOf(0.5f) }
     var brightness by remember { mutableStateOf(0.5f) }
@@ -199,7 +202,17 @@ fun ModernCameraScreen(
                             )
                         )
                 )
-
+                
+                // Flash overlay
+                AnimatedVisibility(
+                    visible = showFlash,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color.White.copy(alpha = 0.35f))) {}
+                }
+                
                 // Countdown overlay
                 AnimatedVisibility(
                     visible = countdownRemaining > 0,
@@ -436,6 +449,12 @@ fun ModernCameraScreen(
                                 val performCapture = {
                                     val ic = imageCapture
                                     if (ic != null) {
+                                        // Trigger a brief flash overlay for capture feedback
+                                        scope.launch {
+                                            showFlash = true
+                                            delay(120)
+                                            showFlash = false
+                                        }
                                         val file = java.io.File(context.cacheDir, "cap_${System.currentTimeMillis()}.jpg")
                                         val output = ImageCapture.OutputFileOptions.Builder(file).build()
                                         ic.takePicture(

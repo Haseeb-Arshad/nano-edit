@@ -135,25 +135,33 @@ fun ModernAppRoot(editRepository: EditRepository) {
                 ) { backStackEntry ->
                     val arg = backStackEntry.arguments?.getString("uri")
                     val uri = arg?.let { Uri.parse(Uri.decode(it)) }
-                    com.example.myapplication.ui.modern.ModernReviewScreen(
+com.example.myapplication.ui.modern.ModernReviewScreen(
                         uri = uri,
                         onEdit = {
                             nav.navigate(NavRoutes.editor(Uri.encode(uri.toString())))
+                        },
+                        onSceneLift = {
+                            nav.navigate(NavRoutes.editor(Uri.encode(uri.toString()), autolift = true))
                         },
                         onBack = { nav.popBackStack() }
                     )
                 }
                 
-                composable(
+composable(
                     route = NavRoutes.Editor,
-                    arguments = listOf(navArgument("uri") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("uri") { type = NavType.StringType },
+                        navArgument("autolift") { type = NavType.BoolType; defaultValue = false }
+                    )
                 ) { backStackEntry ->
                     val arg = backStackEntry.arguments?.getString("uri")
                     val uri = arg?.let { Uri.parse(Uri.decode(it)) }
+                    val autolift = backStackEntry.arguments?.getBoolean("autolift") ?: false
                     com.example.myapplication.ui.modern.ModernEditorScreen(
                         src = uri,
                         controller = editController,
-                        onBack = { nav.popBackStack() }
+                        onBack = { nav.popBackStack() },
+                        autoSceneLift = autolift
                     )
                 }
                 
@@ -325,7 +333,7 @@ onClick = { haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.Hap
 }
 
 @Composable
-fun ReviewScreen(uri: Uri?, onEdit: () -> Unit) {
+fun ReviewScreen(uri: Uri?, onEdit: () -> Unit, onSceneLift: () -> Unit) {
     val ctx = LocalContext.current
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     var original by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -415,6 +423,15 @@ bitmap = e.asImageBitmap(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                com.example.myapplication.ui.components.GlassButton(
+                    onClick = {
+                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                        onSceneLift()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("SceneLift")
+                }
                 com.example.myapplication.ui.components.GlassButton(
                     onClick = {
                         haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)

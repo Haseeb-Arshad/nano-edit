@@ -47,11 +47,21 @@ import com.example.myapplication.utils.loadBitmap
 import com.example.myapplication.utils.saveBitmapToGallery
 import com.example.myapplication.utils.quickEnhance
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.draw.scale
+
+// Added imports for categories and AI analyze
+import com.example.myapplication.ui.filters.FilterCategories
+import com.example.myapplication.ui.filters.FilterCategory
+import com.example.myapplication.ai.MockAIImageProcessor
+import com.example.myapplication.data.ImageAnalysisResult
 
 @Composable
 fun EditorScreen(
     src: Uri?,
-    controller: EditController
+    controller: EditController,
+    autoSceneLift: Boolean = false
 ) {
     val ctx = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -63,6 +73,14 @@ fun EditorScreen(
     var activePreset by remember { mutableStateOf<FilterPreset?>(null) }
     var thumbnails by remember { mutableStateOf<Map<String, Bitmap>>(emptyMap()) }
     val scope = rememberCoroutineScope()
+
+    // New UI state: categories
+    var activeCategory by remember { mutableStateOf<FilterCategory?>(FilterCategories.Tone) }
+
+    // New: local AI analyzer for SceneLift prompt building
+    val aiProcessor = remember { MockAIImageProcessor() }
+    var lastAnalysis by remember { mutableStateOf<ImageAnalysisResult?>(null) }
+    var didAutoSceneLift by remember { mutableStateOf(false) }
 
     LaunchedEffect(src) {
         src?.let {
@@ -79,7 +97,37 @@ fun EditorScreen(
                     }
                 }
             }
+            // Kick off lightweight analysis to fuel SceneLift
+            original?.let { bmp ->
+                lastAnalysis = aiProcessor.analyzeImage(bmp)
+            }
         }
+    }
+
+    // Auto-run SceneLift once when requested (from Review)
+    LaunchedEffect(lastAnalysis, autoSceneLift) {
+        if (autoSceneLift && !didAutoSceneLift) {
+            val prompt = buildSceneLiftPrompt(lastAnalysis)
+            controller.setPrompt(prompt)
+            controller.applyEdit(offline = false)
+            didAutoSceneLift = true
+        }
+    }
+
+    // Helper to build a smart prompt based on analysis
+    fun buildSceneLiftPrompt(analysis: ImageAnalysisResult?): String {
+        if (analysis == null) return "Balanced enhancement, natural lighting, crisp details, true-to-life colors, minimal noise"
+        val tags = analysis.detectedObjects.take(3).joinToString(", ")
+        val styles = analysis.suggestedFilters.map { it.name.lowercase() }.take(2).joinToString(", ")
+        val base = mutableListOf(
+            "balanced enhancement",
+            "natural lighting",
+            "crisp details",
+            "true-to-life colors"
+        )
+        if (tags.isNotBlank()) base += "optimize for: $tags"
+        if (styles.isNotBlank()) base += "style: $styles"
+        return base.joinToString(", ")
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -108,7 +156,7 @@ fun EditorScreen(
         }
 
         // Image area
-Box(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -144,7 +192,7 @@ Box(
             }
 
             // Compare hint overlay
-androidx.compose.animation.AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = working != null && !comparing,
                 enter = fadeIn(),
                 exit = fadeOut(),
@@ -154,7 +202,7 @@ androidx.compose.animation.AnimatedVisibility(
             }
 
             // Progress overlay when applying AI
-androidx.compose.animation.AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = state.isLoading,
                 enter = fadeIn(),
                 exit = fadeOut(),
@@ -170,10 +218,22 @@ androidx.compose.animation.AnimatedVisibility(
             }
         }
 
-        // Prompt input
+        // Prompt input + SceneLift quick-fill
         GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
             Column(Modifier.padding(12.dp)) {
-                Text("Describe enhancement", style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("Describe enhancement", style = MaterialTheme.typography.titleMedium)
+                    // SceneLift action in the prompt card for visibility
+                    GlassButton(onClick = {
+                        val prompt = buildSceneLiftPrompt(lastAnalysis)
+                        controller.setPrompt(prompt)
+                        controller.applyEdit(offline = false)
+                    }) {
+                        Icon(Icons.Default.Star, contentDescription = "SceneLift")
+                        Spacer(Modifier.width(8.dp))
+                        Text("SceneLift")
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 androidx.compose.material3.OutlinedTextField(
                     value = state.prompt,
@@ -186,17 +246,33 @@ androidx.compose.animation.AnimatedVisibility(
 
         Spacer(Modifier.height(8.dp))
 
-        // Presets carousel
+        // Category-based filters with large previews
         GlassCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
             Column(Modifier.padding(12.dp)) {
-                Text("Presets", style = MaterialTheme.typography.titleMedium)
+                Text("Filters", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    items(FilterPresets.All) { preset ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // Category chips
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
+                    items(FilterCategories.All) { cat ->
+                        val selected = activeCategory?.id == cat.id
+                        GlassButton(onClick = { activeCategory = cat }) {
+                            Text(cat.name, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                // Large tiles for selected category
+                val cat = activeCategory ?: FilterCategories.Tone
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
+                    items(cat.presets) { preset ->
+                        val tileScale = animateFloatAsState(
+                            targetValue = if (activePreset == preset) 1.05f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = 0.75f,
+                                stiffness = 200f
+                            )
+                        )
+                        Column(modifier = Modifier.scale(tileScale.value), horizontalAlignment = Alignment.CenterHorizontally) {
                             val thumb = thumbnails[preset.id]
                             GlassCard {
                                 Box(Modifier.padding(4.dp)) {
@@ -204,14 +280,14 @@ androidx.compose.animation.AnimatedVisibility(
                                         Image(
                                             bitmap = thumb.asImageBitmap(),
                                             contentDescription = preset.name,
-                                            modifier = Modifier.size(72.dp).clip(RoundedCornerShape(12.dp))
+                                            modifier = Modifier.size(120.dp).clip(RoundedCornerShape(18.dp))
                                         )
                                     } else {
-                                        Text("…", modifier = Modifier.size(72.dp))
+                                        Text("…", modifier = Modifier.size(120.dp))
                                     }
                                 }
                             }
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(6.dp))
                             GlassButton(
                                 onClick = {
                                     activePreset = preset
@@ -221,14 +297,7 @@ androidx.compose.animation.AnimatedVisibility(
                                     }
                                 },
                                 shape = if (preset == activePreset) MaterialTheme.shapes.medium else MaterialTheme.shapes.small
-                            ) {
-                                Text(
-                                    preset.name,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = if (preset == activePreset) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            ) { Text(preset.name) }
                         }
                     }
                 }
@@ -260,31 +329,31 @@ androidx.compose.animation.AnimatedVisibility(
 
         Spacer(Modifier.height(8.dp))
 
-        // Bottom actions (AI Enhance)
+        // Bottom actions
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             GlassButton(onClick = {
-                // Apply remote AI edit via controller
+                // One-tap SceneLift (same as button in prompt card)
+                val prompt = buildSceneLiftPrompt(lastAnalysis)
+                controller.setPrompt(prompt)
                 controller.applyEdit(offline = false)
             }) {
-                Icon(Icons.Default.Star, contentDescription = "AI")
+                Icon(Icons.Default.Star, contentDescription = "SceneLift")
                 Spacer(Modifier.width(8.dp))
-                Text("AI Enhance")
+                Text("SceneLift")
             }
             androidx.compose.animation.AnimatedVisibility(visible = state.resultUrl != null) {
-GlassButton(onClick = {
+                GlassButton(onClick = {
                     val url = state.resultUrl ?: return@GlassButton
                     // Replace working with downloaded result
                     scope.launch {
                         val bmp = com.example.myapplication.utils.loadBitmap(ctx, url)
                         if (bmp != null) working = bmp
                     }
-                }) {
-                    Text("Use AI Result")
-                }
+                }) { Text("Use Result") }
             }
         }
     }
