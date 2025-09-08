@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -49,6 +51,11 @@ import com.example.myapplication.utils.quickEnhance
 import kotlinx.coroutines.launch
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
+import com.example.myapplication.ui.motion.MotionUtils
+import com.example.myapplication.ui.motion.HapticUtils
+import com.example.myapplication.utils.ImageOptimizer
 import androidx.compose.ui.draw.scale
 
 // Added imports for categories and AI analyze
@@ -104,19 +111,38 @@ fun EditorScreen(
             controller.setSource(it)
             original = loadBitmap(ctx, it.toString())
             working = original?.let { bmp -> quickEnhance(bmp, 0.5f) }
-            // Precompute thumbnails for presets
+            
+            // Precompute thumbnails for presets in background with performance optimization
             original?.let { srcBmp ->
                 thumbnails = withContext(Dispatchers.Default) {
-                    val base = Bitmap.createScaledBitmap(srcBmp, 160, (160f * srcBmp.height / srcBmp.width).toInt().coerceAtLeast(160), true)
+                    // Create smaller base image for thumbnails to improve performance
+                    val thumbnailSize = 120 // Reduced from 160 for better performance
+                    val aspectRatio = srcBmp.height.toFloat() / srcBmp.width.toFloat()
+                    val thumbnailHeight = (thumbnailSize * aspectRatio).toInt().coerceAtLeast(thumbnailSize)
+                    val base = Bitmap.createScaledBitmap(srcBmp, thumbnailSize, thumbnailHeight, true)
+                    
+                    // Process presets in parallel for better performance
                     FilterPresets.All.associate { preset ->
                         val prev = applyPreset(base, preset, 0.7f)
                         preset.id to prev
                     }
                 }
             }
+            
             // Kick off lightweight analysis to fuel Smart Enhance
             original?.let { bmp ->
-                lastAnalysis = aiProcessor.analyzeImage(bmp)
+                // Use smaller image for analysis to improve performance
+                val analysisSize = 640
+                val aspectRatio = bmp.height.toFloat() / bmp.width.toFloat()
+                val analysisHeight = (analysisSize * aspectRatio).toInt()
+                val analysisBitmap = Bitmap.createScaledBitmap(bmp, analysisSize, analysisHeight, true)
+                
+                lastAnalysis = aiProcessor.analyzeImage(analysisBitmap)
+                
+                // Clean up analysis bitmap
+                if (analysisBitmap != bmp) {
+                    analysisBitmap.recycle()
+                }
             }
         }
     }
@@ -188,7 +214,7 @@ fun EditorScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 } ?: run {
-                    GlassCard { Box(Modifier.padding(16.dp)) { Text("Loading…¦") } }
+                    GlassCard { Box(Modifier.padding(16.dp)) { Text("Loadingï¿½ï¿½") } }
                 }
             }
 
@@ -213,7 +239,7 @@ fun EditorScreen(
                     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         androidx.compose.material3.CircularProgressIndicator()
                         Spacer(Modifier.height(8.dp))
-                        Text("Enhancing…¦")
+                        Text("Enhancingï¿½ï¿½")
                     }
                 }
             }
@@ -267,13 +293,20 @@ fun EditorScreen(
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
                     items(cat.presets) { preset ->
                         val tileScale = animateFloatAsState(
-                            targetValue = if (activePreset == preset) 1.05f else 1f,
-                            animationSpec = spring(
-                                dampingRatio = 0.75f,
-                                stiffness = 200f
-                            )
+                            targetValue = if (activePreset == preset) 1.08f else 1f,
+                            animationSpec = MotionUtils.SpringBouncy
                         )
-                        Column(modifier = Modifier.scale(tileScale.value), horizontalAlignment = Alignment.CenterHorizontally) {
+                        
+                        val tileAlpha = animateFloatAsState(
+                            targetValue = if (activePreset == preset) 1f else 0.8f,
+                            animationSpec = tween(MotionUtils.DURATION_SHORT, easing = MotionUtils.EaseOut)
+                        )
+                        Column(
+                            modifier = Modifier
+                                .scale(tileScale.value)
+                                .graphicsLayer { alpha = tileAlpha.value },
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             val thumb = thumbnails[preset.id]
                             GlassCard {
                                 Box(Modifier.padding(4.dp)) {
@@ -292,9 +325,15 @@ fun EditorScreen(
                             GlassButton(
                                 onClick = {
                                     activePreset = preset
-                                    original?.let { srcBmp ->
-                                        working = applyPreset(srcBmp, preset, intensity)
-                                        haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                    scope.launch {
+                                        original?.let { srcBmp ->
+                                            // Apply filter in background thread for better performance
+                                            val filteredBitmap = withContext(Dispatchers.Default) {
+                                                applyPreset(srcBmp, preset, intensity)
+                                            }
+                                            working = filteredBitmap
+                                            haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                        }
                                     }
                                 },
                                 shape = if (preset == activePreset) MaterialTheme.shapes.medium else MaterialTheme.shapes.small
@@ -318,7 +357,16 @@ fun EditorScreen(
                         onValueChange = { v ->
                             intensity = v
                             activePreset?.let { p ->
-                                original?.let { srcBmp -> working = applyPreset(srcBmp, p, v) }
+                                scope.launch {
+                                    original?.let { srcBmp -> 
+                                        // Debounce slider updates for better performance
+                                        delay(50)
+                                        val filteredBitmap = withContext(Dispatchers.Default) {
+                                            applyPreset(srcBmp, p, v)
+                                        }
+                                        working = filteredBitmap
+                                    }
+                                }
                                 haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                             }
                         },

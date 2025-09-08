@@ -89,7 +89,7 @@ fun GlassButton(
 }
 
 @Composable
-fun ShutterButton(
+fun ShutterButtonClassic(
     isCapturing: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier

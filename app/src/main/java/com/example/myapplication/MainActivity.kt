@@ -28,6 +28,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.FloatingActionButton
+import com.example.myapplication.ui.modern.ModernReviewScreen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
@@ -148,6 +149,7 @@ fun ModernAppRoot(editRepository: EditRepository) {
                     }
                     com.example.myapplication.ui.modern.ModernReviewScreen(
                         uri = uri,
+                        repository = editRepository,
                         onEdit = {
                             nav.navigate(NavRoutes.editor(Uri.encode(uri.toString())))
                         },
@@ -326,9 +328,9 @@ chips.forEach { chip ->
                 .padding(bottom = 20.dp)
         ) {
             Row(Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                com.example.myapplication.ui.components.ShutterButton(
+com.example.myapplication.ui.components.ShutterButtonClassic(
                     isCapturing = state.isCapturing,
-onClick = { haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); controller.capture(ctx) { uri -> uri?.let(onCaptured) } },
+                    onClick = { haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress); controller.capture(ctx) { uri -> uri?.let(onCaptured) } },
                     modifier = Modifier
                         .padding(8.dp)
                         .then(Modifier.size(96.dp))

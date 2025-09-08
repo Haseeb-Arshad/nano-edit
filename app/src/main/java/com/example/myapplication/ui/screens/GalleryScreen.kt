@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -89,7 +93,7 @@ fun GalleryScreen(
 
     LaunchedEffect(sortDescending) { reload() }
 
-    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+    androidx.compose.foundation.layout.Column(Modifier.fillMaxSize().statusBarsPadding().windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.navigationBars)) {
         // Glass top bar with title and segmented controls
         com.example.myapplication.ui.components.GlassCard(
             modifier = Modifier
@@ -136,12 +140,13 @@ fun GalleryScreen(
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp))
                         }
-                        val group = entries.filter { bucketFor(it.second) == label }
-                        items(group.size) { idx ->
-                            val uri = group[idx].first
-                            androidx.compose.material3.Card(
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-                            ) {
+                    val group = entries.filter { bucketFor(it.second) == label }
+                    items(group.size) { idx ->
+                        val uri = group[idx].first
+                        androidx.compose.material3.Card(
+                            modifier = Modifier.animateItemPlacement(),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                        ) {
                                 AsyncImage(
                                     model = uri,
                                     contentDescription = null,

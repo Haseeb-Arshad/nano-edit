@@ -68,6 +68,12 @@ dependencies {
     // Material icons extended for additional Icons.* used
     implementation("androidx.compose.material:material-icons-extended")
     
+    // Compose Graphics and UI
+    implementation("androidx.compose.ui:ui-graphics:1.5.4")
+    implementation("androidx.compose.foundation:foundation:1.5.4")
+    implementation("androidx.compose.animation:animation:1.5.4")
+    implementation("androidx.compose.material3:material3-window-size-class:1.1.2")
+    
     // CameraX
     implementation("androidx.camera:camera-core:1.3.2")
     implementation("androidx.camera:camera-camera2:1.3.2")

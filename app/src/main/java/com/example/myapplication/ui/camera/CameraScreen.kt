@@ -19,13 +19,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.myapplication.controller.CameraController
+// CameraController import removed - using direct camera implementation
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import java.util.concurrent.Executors
+import android.content.ContentValues
+import android.os.Environment
+import android.provider.MediaStore
+import androidx.camera.core.ImageCaptureException
+import android.graphics.BitmapFactory
+import androidx.camera.core.ImageCapture
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -36,7 +42,7 @@ fun CameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     val scope = rememberCoroutineScope()
-    val controller = remember { CameraController() }
+    // Direct camera implementation without controller
     
     var previewView: PreviewView? by remember { mutableStateOf(null) }
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
@@ -106,10 +112,48 @@ fun CameraScreen(
                 // Capture button
                 FloatingActionButton(
                     onClick = {
-                        // TODO: Implement bitmap capture properly
-                        // For now, create a placeholder bitmap
-                        val placeholderBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
-                        onImageCaptured(placeholderBitmap)
+                        val capture = imageCapture ?: return@FloatingActionButton
+                        // Capture to app file and decode, also save to MediaStore so it appears in Gallery
+                        val file = java.io.File(
+                            context.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES) ?: context.cacheDir,
+                            "captured_${System.currentTimeMillis()}.jpg"
+                        )
+                        val options = ImageCapture.OutputFileOptions.Builder(file).build()
+                        capture.takePicture(
+                            options,
+                            ContextCompat.getMainExecutor(context),
+                            object : ImageCapture.OnImageSavedCallback {
+                                override fun onError(exception: ImageCaptureException) {
+                                    // Fallback placeholder on error
+                                    val placeholderBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+                                    onImageCaptured(placeholderBitmap)
+                                }
+                                override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                                    val bmp = BitmapFactory.decodeFile(file.absolutePath)
+                                    if (bmp != null) {
+                                        // Persist to MediaStore (Pictures/AI Camera)
+                                        try {
+                                            val name = "AICam_" + System.currentTimeMillis()
+                                            val values = ContentValues().apply {
+                                                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                                                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                                                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/AI Camera")
+                                            }
+                                            val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                                            if (uri != null) {
+                                                context.contentResolver.openOutputStream(uri)?.use { out ->
+                                                    bmp.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                                                }
+                                            }
+                                        } catch (_: Throwable) {}
+                                        onImageCaptured(bmp)
+                                    } else {
+                                        val placeholderBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+                                        onImageCaptured(placeholderBitmap)
+                                    }
+                                }
+                            }
+                        )
                     },
                     shape = CircleShape,
                     modifier = Modifier.size(72.dp)

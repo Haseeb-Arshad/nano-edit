@@ -32,16 +32,23 @@ class CameraController {
         previewView: PreviewView
     ) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-        val cameraProvider = cameraProviderFuture.get()
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
+            imageCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .build()
+            val selector = CameraSelector.DEFAULT_BACK_CAMERA
 
-        val preview = Preview.Builder().build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
-        imageCapture = ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build()
-        val selector = CameraSelector.DEFAULT_BACK_CAMERA
-
-        cameraProvider.unbindAll()
-        cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview, imageCapture)
+            try {
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview, imageCapture)
+            } catch (t: Throwable) {
+                _state.update { it.copy(error = t.message) }
+            }
+        }, ContextCompat.getMainExecutor(context))
     }
 
     fun updatePermission(granted: Boolean) {
@@ -85,4 +92,3 @@ class CameraController {
         )
     }
 }
-

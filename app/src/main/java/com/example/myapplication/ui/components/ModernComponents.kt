@@ -436,6 +436,8 @@ data class FloatingMenuItem(
     val backgroundColor: Color = NeonBlue
 )
 
+
+
 /**
  * Animated gradient background
  */
@@ -443,31 +445,19 @@ data class FloatingMenuItem(
 fun AnimatedGradientBackground(
     modifier: Modifier = Modifier,
     colors: List<Color> = listOf(
-        NeonPink.copy(alpha = 0.3f),
-        NeonBlue.copy(alpha = 0.3f),
-        NeonPurple.copy(alpha = 0.3f)
+        Color.Black,
+        Color.Black
     )
 ) {
-    val infiniteTransition = rememberInfiniteTransition()
-    val offset = infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        )
-    )
-    
     Box(
         modifier = modifier
-            .drawBehind {
-                drawRect(
-                    brush = Brush.linearGradient(
-                        colors = colors,
-                        start = Offset(0f, 0f),
-                        end = Offset(size.width * offset.value, size.height * offset.value)
+            .background(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.Black,
+                        Color.Black.copy(alpha = 0.95f)
                     )
                 )
-            }
+            )
     )
 }

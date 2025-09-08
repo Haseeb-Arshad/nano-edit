@@ -9,9 +9,10 @@ import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 class NanoBananaImageProcessor @Inject constructor(
-    private val api: NanoBananaApi
+    private val api: NanoBananaApi,
+    private val backend: com.example.myapplication.network.ApiService
 ) : AIImageProcessor {
-    private val repo = EditRepository(api)
+    private val repo = EditRepository(api, backend)
     private val mock = MockAIImageProcessor()
 
     override suspend fun analyzeImage(bitmap: Bitmap): ImageAnalysisResult {
