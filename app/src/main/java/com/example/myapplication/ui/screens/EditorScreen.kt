@@ -98,6 +98,11 @@ fun EditorScreen(
     var thumbnails by remember { mutableStateOf<Map<String, Bitmap>>(emptyMap()) }
     val scope = rememberCoroutineScope()
 
+    // When controller finishes an edit and publishes a resultUrl, load it automatically
+    AutoApplyResult(resultUrl = state.resultUrl) { bmp ->
+        if (bmp != null) working = bmp
+    }
+
     // New UI state: categories
     var activeCategory by remember { mutableStateOf<FilterCategory?>(FilterCategories.ToneCategory) }
 
@@ -152,7 +157,7 @@ fun EditorScreen(
         if (autoSmartEnhance && !didAutoSmartEnhance) {
             val prompt = buildSmartEnhancePrompt(lastAnalysis)
             controller.setPrompt(prompt)
-            controller.applyEdit(offline = false)
+            controller.applyEdit(context = ctx, offline = false)
             didAutoSmartEnhance = true
         }
     }
@@ -239,7 +244,8 @@ fun EditorScreen(
                     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         androidx.compose.material3.CircularProgressIndicator()
                         Spacer(Modifier.height(8.dp))
-                        Text("Enhancing��")
+                        val pct = state.progress?.coerceIn(0, 100)
+                        Text(if (pct != null) "Enhancing… $pct%" else "Enhancing…")
                     }
                 }
             }
@@ -254,7 +260,7 @@ fun EditorScreen(
                     GlassButton(onClick = {
                         val prompt = buildSmartEnhancePrompt(lastAnalysis)
                         controller.setPrompt(prompt)
-                        controller.applyEdit(offline = false)
+                        controller.applyEdit(context = ctx, offline = false)
                     }) {
                         Icon(Icons.Default.Star, contentDescription = "Smart Enhance")
                         Spacer(Modifier.width(8.dp))
@@ -325,9 +331,9 @@ fun EditorScreen(
                             GlassButton(
                                 onClick = {
                                     activePreset = preset
+                                    // Instant local preview for responsiveness
                                     scope.launch {
                                         original?.let { srcBmp ->
-                                            // Apply filter in background thread for better performance
                                             val filteredBitmap = withContext(Dispatchers.Default) {
                                                 applyPreset(srcBmp, preset, intensity)
                                             }
@@ -335,6 +341,10 @@ fun EditorScreen(
                                             haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                         }
                                     }
+                                    // Trigger backend AI processing for this preset
+                                    val prompt = buildPromptForPreset(preset, intensity)
+                                    controller.setPrompt(prompt)
+                                    controller.applyEdit(context = ctx, offline = false)
                                 },
                                 shape = if (preset == activePreset) MaterialTheme.shapes.medium else MaterialTheme.shapes.small
                             ) { Text(preset.name) }
@@ -370,6 +380,14 @@ fun EditorScreen(
                                 haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                             }
                         },
+                        onValueChangeFinished = {
+                            // When user finishes adjusting intensity, submit to backend
+                            activePreset?.let { p ->
+                                val prompt = buildPromptForPreset(p, intensity)
+                                controller.setPrompt(prompt)
+                                controller.applyEdit(context = ctx, offline = false)
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -388,7 +406,7 @@ fun EditorScreen(
                 // One-tap Smart Enhance (same as button in prompt card)
                 val prompt = buildSmartEnhancePrompt(lastAnalysis)
                 controller.setPrompt(prompt)
-                controller.applyEdit(offline = false)
+                controller.applyEdit(context = ctx, offline = false)
             }) {
                 Icon(Icons.Default.Star, contentDescription = "Smart Enhance")
                 Spacer(Modifier.width(8.dp))
@@ -404,6 +422,42 @@ fun EditorScreen(
                     }
                 }) { Text("Use Result") }
             }
+        }
+    }
+}
+
+// Helper to build an AI prompt string from a chosen preset + intensity
+private fun buildPromptForPreset(preset: FilterPreset, intensity: Float): String {
+    val pct = (intensity.coerceIn(0f, 1f) * 100).toInt()
+    val base = when (preset.id) {
+        "vibrant" -> "Increase vibrance and saturation modestly; keep natural skin tones; avoid oversaturation."
+        "warm" -> "Apply warm tone with gentle contrast; enhance golden hues; keep whites neutral."
+        "cool" -> "Apply cool tone; slightly lift blues; preserve neutral grays; avoid color cast on skin."
+        "mono" -> "Convert to tasteful monochrome; maintain rich midtones; avoid crushed blacks."
+        "sepia" -> "Apply classic sepia tone; preserve detail; low contrast."
+        "hi_contrast" -> "Increase local contrast and clarity; avoid halos and oversharpening."
+        "soft" -> "Slight soften and reduce harsh highlights; preserve texture; low saturation change."
+        "film" -> "Film-like look with gentle grain and warm curve; subtle saturation boost."
+        "retro" -> "Retro tone mapping; slight fade; mild color shift reminiscent of vintage prints."
+        "cinematic" -> "Cinematic grade with teal-orange balance; enhanced contrast; maintain natural skin tones."
+        "vivid" -> "Vivid, punchy colors with clarity boost; avoid clipping highlights."
+        "night" -> "Night enhancement; lift shadows, reduce noise, keep colors faithful."
+        else -> "Subtle enhancement; preserve details and natural tones."
+    }
+    return "$base Intensity ~${pct}% on the whole image."
+}
+
+// Auto-apply returned result image into working preview when available
+@Composable
+private fun AutoApplyResult(
+    resultUrl: String?,
+    onBitmap: (Bitmap?) -> Unit
+) {
+    val ctx = LocalContext.current
+    LaunchedEffect(resultUrl) {
+        if (!resultUrl.isNullOrBlank()) {
+            val bmp = com.example.myapplication.utils.loadBitmap(ctx, resultUrl)
+            onBitmap(bmp)
         }
     }
 }

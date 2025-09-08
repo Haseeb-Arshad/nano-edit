@@ -17,7 +17,7 @@ object ImageSaver {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
                     put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/AIPhotoApp")
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/AI Camera")
                     }
                 }
                 

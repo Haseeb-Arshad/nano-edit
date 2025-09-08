@@ -13,8 +13,13 @@ val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-val nbApiKey: String = (localProps.getProperty("NB_API_KEY") ?: System.getenv("NB_API_KEY") ?: "").toString()
-val nbBaseUrl: String = (localProps.getProperty("NB_BASE_URL") ?: System.getenv("NB_BASE_URL") ?: "https://api.nanobanana.example/").toString()
+// Defaults aim at your deployed backend on Render for convenience
+val nbApiKey: String = (localProps.getProperty("NB_API_KEY")
+    ?: System.getenv("NB_API_KEY")
+    ?: "dev-token").toString()
+val nbBaseUrl: String = (localProps.getProperty("NB_BASE_URL")
+    ?: System.getenv("NB_BASE_URL")
+    ?: "https://nemo-edit.onrender.com/").toString()
 
 android {
     namespace = "com.example.myapplication"

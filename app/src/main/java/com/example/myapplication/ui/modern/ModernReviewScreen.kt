@@ -2,6 +2,7 @@ package com.example.myapplication.ui.modern
 
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
@@ -10,6 +11,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -23,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -37,7 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ModernReviewScreen(
     uri: Uri?,
@@ -58,6 +63,8 @@ fun ModernReviewScreen(
     var exportProgress by remember { mutableStateOf(0) }
     var exportError by remember { mutableStateOf<String?>(null) }
     val snackbar = remember { SnackbarHostState() }
+    var aiSheet by remember { mutableStateOf(false) }
+    var labelsCache by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Load original lazily
     LaunchedEffect(uri) {
@@ -150,6 +157,7 @@ fun ModernReviewScreen(
             )
             val result = labeler.process(image).await()
             val labels = result.map { it.text.lowercase() }
+            labelsCache = labels
             val pick = when {
                 labels.any { it.contains("person") || it.contains("selfie") || it.contains("face") } -> "portrait_smooth"
                 labels.any { it.contains("plant") || it.contains("leaf") || it.contains("tree") || it.contains("green") } -> "green_boost"
@@ -201,201 +209,116 @@ fun ModernReviewScreen(
             }
         }
 
-        // Post-capture suggestions sheet
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-        ModalBottomSheet(
-            onDismissRequest = { onBack() },
-            sheetState = sheetState,
-            dragHandle = { BottomSheetDefaults.DragHandle() },
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.15f),
-            scrimColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
+        // Bottom filters + actions panel
+        GlassmorphicCard(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            cornerRadius = 20.dp
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = "AI Suggestions",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Top actions row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AssistChip(onClick = { /* open AI sheet */ aiSheet = true }, label = { Text("AI Suggest") }, leadingIcon = { Icon(Icons.Outlined.AutoAwesome, null) })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(onClick = { splitView = !splitView }, label = { Text(if (splitView) "Compare" else "Compare") })
+                        AssistChip(onClick = {
+                            val bmp = preview ?: original ?: return@AssistChip
+                            scope.launch { saving = true; ImageSaver.saveImageToGallery(context, bmp, "AICam_Edit_${System.currentTimeMillis()}"); saving = false; snackbar.showSnackbar("Saved to Gallery") }
+                        }, label = { Text(if (saving) "Saving…" else "Save") })
+                    }
+                }
 
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                // Swipeable filter carousel with snapping
+                val state = rememberLazyListState()
+                val fling = rememberSnapFlingBehavior(lazyListState = state)
+                LazyRow(
+                    state = state,
+                    flingBehavior = fling,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
                     items(suggestions) { spec ->
-                        SuggestionCard(
+                        FilterThumb(
                             title = spec.title,
-                            why = spec.why,
-                            thumbnail = thumbs[spec.id],
-                            applied = appliedId == spec.id,
-                            strength = strengths[spec.id] ?: 1f,
-                            onStrengthChange = { s -> strengths = strengths.toMutableMap().apply { put(spec.id, s) } },
-                            onApply = {
-                                val base = (preview ?: original) ?: return@SuggestionCard
+                            bitmap = thumbs[spec.id],
+                            selected = appliedId == spec.id,
+                            onClick = {
+                                val base = (original ?: return@FilterThumb)
                                 val engine = RealTimeFilterEngine(context)
                                 scope.launch {
                                     val result = withContext(Dispatchers.Default) {
-                                        val s = strengths[spec.id] ?: 1f
                                         val cfg = base.config ?: Bitmap.Config.ARGB_8888
+                                        val s = strengths[spec.id] ?: 1f
                                         spec.render(engine, base.copy(cfg, true), s)
                                     }
                                     preview = result
                                     appliedId = spec.id
-                                    // Append layer for version timeline
-                                    val thumb = withContext(Dispatchers.Default) {
-                                        val max = 160
-                                        val ratio = minOf(max / result.width.toFloat(), max / result.height.toFloat())
-                                        val w = (result.width * ratio).toInt().coerceAtLeast(40)
-                                        val h = (result.height * ratio).toInt().coerceAtLeast(40)
-                                        Bitmap.createScaledBitmap(result, w, h, true)
-                                    }
-                                    layers = layers + AppliedLayer(spec.id, spec.title, strengths[spec.id] ?: 1f, thumb)
                                     engine.cleanup()
                                 }
                             }
                         )
                     }
                 }
+            }
+        }
 
-                Spacer(Modifier.height(12.dp))
-
-                // Versions timeline (horizontal)
-                if (layers.isNotEmpty()) {
+        // AI sheet (recommendation-based filters)
+        if (aiSheet) {
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ModalBottomSheet(
+                onDismissRequest = { aiSheet = false },
+                sheetState = sheetState,
+                scrimColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.45f)
+            ) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text("Suggested Filters", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(8.dp))
-                    Text("Versions", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
-                    Spacer(Modifier.height(8.dp))
-                    androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item {
-                            AssistChip(
-                                onClick = { preview = original; layers = emptyList(); appliedId = null },
-                                label = { Text("Original") }
-                            )
+                    val picks = remember(labelsCache, suggestions) {
+                        val ls = labelsCache
+                        val ordered = buildList<SuggestionSpec> {
+                            if (ls.any { it.contains("person") || it.contains("selfie") || it.contains("face") }) add(suggestions.first { it.id == "portrait_smooth" })
+                            if (ls.any { it.contains("plant") || it.contains("leaf") || it.contains("tree") || it.contains("green") }) add(suggestions.first { it.id == "green_boost" })
+                            if (ls.any { it.contains("night") || it.contains("dark") || it.contains("low light") }) add(suggestions.first { it.id == "noise_clean" })
+                            add(suggestions.first { it.id == "hdr_pop" })
+                            add(suggestions.first { it.id == "film_400" })
                         }
-                        items(layers) { layer ->
-                            ElevatedAssistChip(
-                                onClick = {
-                                    // Revert to this layer: truncate layers after it and show its preview
-                                    val idx = layers.indexOfFirst { it === layer }
-                                    if (idx >= 0) {
-                                        preview = layer.preview
-                                        layers = layers.take(idx + 1)
-                                        appliedId = layer.id
+                        ordered.distinctBy { it.id }
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                        items(picks) { spec ->
+                            FilterThumb(title = spec.title, bitmap = thumbs[spec.id], selected = appliedId == spec.id) {
+                                val base = (original ?: return@FilterThumb)
+                                val engine = RealTimeFilterEngine(context)
+                                scope.launch {
+                                    val result = withContext(Dispatchers.Default) {
+                                        val cfg = base.config ?: Bitmap.Config.ARGB_8888
+                                        val s = strengths[spec.id] ?: 1f
+                                        spec.render(engine, base.copy(cfg, true), s)
                                     }
-                                },
-                                label = { Text(layer.title) }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // Bottom toolbar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledTonalButton(onClick = onEdit) {
-                        Icon(Icons.Outlined.Edit, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Edit")
-                    }
-                    FilledTonalButton(onClick = { splitView = !splitView }, enabled = (original != null && preview != null)) {
-                        Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (splitView) "Split On" else "Split View")
-                    }
-                    FilledTonalButton(onClick = { preview = original; appliedId = null }) {
-                        Icon(Icons.Outlined.Check, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Reset")
-                    }
-                    // Export Full‑Res via NanoBanana
-                    FilledTonalButton(onClick = {
-                        val srcUri = uri ?: return@FilledTonalButton
-                        val prompt = buildPromptFromLayers(layers.map { it.title to it.strength })
-                        exportError = null
-                        exporting = true
-                        exportProgress = 0
-                        scope.launch {
-                            val result = repository.uploadFullResAndPoll(context, srcUri, prompt) { p -> exportProgress = p }
-                            exporting = false
-                            result.url?.let { url ->
-                                // Download final and save to Gallery
-                                val bmp = loadBitmap(context, url)
-                                if (bmp != null) {
-                                    ImageSaver.saveImageToGallery(context, bmp, "AICam_FullRes_${System.currentTimeMillis()}")
-                                    // Share CTA
-                                    val res = snackbar.showSnackbar(
-                                        message = "Exported successfully",
-                                        actionLabel = "Share now"
-                                    )
-                                    if (res == SnackbarResult.ActionPerformed) {
-                                        com.example.myapplication.utils.shareBitmapViaFileProvider(
-                                            context, bmp, "AICam_Export_${System.currentTimeMillis()}.jpg"
-                                        )
-                                    }
+                                    preview = result
+                                    appliedId = spec.id
+                                    engine.cleanup()
+                                    aiSheet = false
                                 }
                             }
-                            if (result.error != null) exportError = result.error
-                        }
-                    }) {
-                        if (exporting) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Export ${exportProgress}%")
-                        } else {
-                            Icon(Icons.Outlined.Download, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Export Full‑Res")
                         }
                     }
-                    FilledTonalButton(onClick = {
-                        val bmp = preview ?: original ?: return@FilledTonalButton
-                        scope.launch {
-                            saving = true
-                            ImageSaver.saveImageToGallery(context, bmp, "AICam_${System.currentTimeMillis()}")
-                            saving = false
-                        }
-                    }) {
-                        Icon(Icons.Outlined.Download, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (saving) "Saving…" else "Save")
-                    }
-                    FilledTonalButton(onClick = {
-                        val bmp = preview ?: original ?: return@FilledTonalButton
-                        scope.launch {
-                            com.example.myapplication.utils.shareBitmapViaFileProvider(
-                                context, bmp, "AICamShare_${System.currentTimeMillis()}.jpg"
-                            )
-                        }
-                    }) {
-                        Icon(Icons.Outlined.Share, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Share")
-                    }
-                }
-                if (exportError != null) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = exportError ?: "",
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
-                    )
                 }
             }
         }
 
         // Snackbar host overlay
-        SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp))
+        SnackbarHost(hostState = snackbar, modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(bottom = 16.dp))
     }
 }
 
@@ -405,6 +328,48 @@ private data class SuggestionSpec(
     val why: String,
     val render: (RealTimeFilterEngine, Bitmap, Float) -> Bitmap
 )
+
+@Composable
+private fun FilterThumb(title: String, bitmap: Bitmap?, selected: Boolean, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        GlassmorphicCard(cornerRadius = 14.dp) {
+            Box(
+                modifier = Modifier
+                    .size(96.dp, 72.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (selected) 0.28f else 0.18f))
+                    .padding(2.dp)
+            ) {
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)))
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(16.dp)
+                        .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                ) {}
+            }
+        }
+        Text(title, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+        TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Apply") }
+    }
+}
+
+// Cache labels and pick suggestions for AI sheet
+@Composable
+private fun aiPicks(labels: List<String>): List<SuggestionSpec> {
+    // This method is a placeholder hook; the actual choices are mapped in the main Composable where suggestions is defined
+    return emptyList()
+}
 
 private fun buildPromptFromLayers(layers: List<Pair<String, Float>>): String {
     if (layers.isEmpty()) {

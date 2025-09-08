@@ -20,7 +20,7 @@ data class EditUiState(
     val sourceUri: Uri? = null,
     val prompt: String = "",
     val isLoading: Boolean = false,
+    val progress: Int? = null,
     val resultUrl: String? = null,
     val error: String? = null
 )
-

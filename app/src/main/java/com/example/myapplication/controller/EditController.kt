@@ -1,5 +1,6 @@
 package com.example.myapplication.controller
 
+import android.content.Context
 import android.net.Uri
 import com.example.myapplication.data.EditUiState
 import com.example.myapplication.data.EditRepository
@@ -26,31 +27,30 @@ class EditController @Inject constructor(
         _state.update { it.copy(prompt = text) }
     }
 
-    fun applyEdit(offline: Boolean = false) {
+    fun applyEdit(context: Context, offline: Boolean = false) {
         val src = state.value.sourceUri ?: return
         val prompt = state.value.prompt
-        _state.update { it.copy(isLoading = true, error = null, resultUrl = null) }
+        _state.update { it.copy(isLoading = true, error = null, resultUrl = null, progress = 0) }
         scope.launch {
             runCatching {
                 if (offline) {
                     // Offline: pretend to transform and echo the original URI
-                    _state.update { it.copy(isLoading = false, resultUrl = src.toString()) }
+                    _state.update { it.copy(isLoading = false, resultUrl = src.toString(), progress = null) }
                 } else {
-                    val jobId = repo.submitEdit(src.toString(), prompt)
-                    var result = repo.pollResult(jobId)
-                    // Poll with a small delay to avoid busy loop
-                    while (!result.isTerminal) {
-                        kotlinx.coroutines.delay(1000)
-                        result = repo.pollResult(jobId)
-                    }
+                    val result = repo.uploadFullResAndPoll(
+                        context = context,
+                        uri = src,
+                        prompt = prompt,
+                        onProgress = { p -> _state.update { st -> st.copy(progress = p.coerceIn(0, 100)) } }
+                    )
                     if (result.url != null) {
-                        _state.update { it.copy(isLoading = false, resultUrl = result.url) }
+                        _state.update { it.copy(isLoading = false, resultUrl = result.url, progress = null) }
                     } else {
-                        _state.update { it.copy(isLoading = false, error = result.error ?: "Unknown error") }
+                        _state.update { it.copy(isLoading = false, error = result.error ?: "Unknown error", progress = null) }
                     }
                 }
             }.onFailure { e ->
-                _state.update { it.copy(isLoading = false, error = e.message) }
+                _state.update { it.copy(isLoading = false, error = e.message, progress = null) }
             }
         }
     }

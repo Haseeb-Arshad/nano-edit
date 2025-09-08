@@ -596,6 +596,8 @@ fun ModernCameraScreen(
                                     
                                     // Capture image via modular manager (suspend)
                                     val bitmap = captureManager.capture()
+                                    // Immediately save to Gallery so it appears in Gallery view
+                                    saveBitmapToMediaStore(context, bitmap)
                                     lastThumb = bitmap
                                     pendingPreview = bitmap
                                     showPreviewOverlay = true
@@ -717,7 +719,8 @@ Icon(
                 Row(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 24.dp),
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = 32.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     GlassmorphicButton(
@@ -735,8 +738,7 @@ Icon(
                     GlassmorphicButton(
                         onClick = {
                             val bmp = pendingPreview ?: return@GlassmorphicButton
-                            // Save to gallery and continue to review
-                            saveBitmapToMediaStore(context, bmp)
+                            // Already saved on capture; just proceed to review
                             // Update last captured thumbnail
                             val target = 96
                             val ratio = minOf(target / bmp.width.toFloat(), target / bmp.height.toFloat())
@@ -745,7 +747,6 @@ Icon(
                             lastThumb = Bitmap.createScaledBitmap(bmp, w, h, true)
                             scope.launch { onImageCaptured(bmp) }
                             pendingPreview = null
-                            // No temp file in in-memory capture path
                             showPreviewOverlay = false
                         },
                         cornerRadius = DesignTokens.Radius.pill
